@@ -18,6 +18,15 @@ from keras.models import load_model
 import h5py
 from keras import __version__ as keras_version
 
+import tensorflow as tf
+
+
+# For issue `failed to create cublas handle: CUBLAS_STATUS_NOT_INITIALIZED`
+# https://github.com/tensorflow/tensorflow/issues/45070
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+
 sio = socketio.Server()
 app = Flask(__name__)
 model = None
