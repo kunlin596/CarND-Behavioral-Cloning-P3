@@ -4,13 +4,13 @@ import os
 import cv2
 import collections
 import math
+import argparse
 from sklearn.model_selection import train_test_split
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 import keras as K
-from drive import TARGET_SPEED
 
 import seaborn as sns  # noqa: F401
 import sklearn  # noqa: F401
@@ -22,21 +22,25 @@ from IPython import embed  # noqa: F401
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-
-DATA_FOLDER_NAME = 'carnd-pj3-data'
-DATA_PATH = os.path.join(os.environ['HOME'], 'dev/data/', DATA_FOLDER_NAME)
-CSV_PATH = os.path.join(DATA_PATH, 'driving_log.csv')
-
-
 np.set_printoptions(precision=3, suppress=True)
+
+TARGET_SPEED = 32
+COLUMN_NAMES = collections.OrderedDict({
+    'center': 0,
+    'left': 1,
+    'right': 2,
+    'steering': 3,
+    'throttle': 4,
+    'brake': 5,
+    'speed': 6
+})
 
 
 class DataGenerator(K.utils.Sequence):
 
-    def __init__(self, samples, column_names=None, batch_size=1, dim=(160, 320, 1)):
+    def __init__(self, samples, batch_size=1, dim=(160, 320, 1)):
         self._batch_size = batch_size
-        self._samples = samples.to_numpy()
-        self._column_names = column_names
+        self._samples = samples
         self._indices = np.arange(samples.shape[0])
 
     def __len__(self):
@@ -52,7 +56,7 @@ class DataGenerator(K.utils.Sequence):
         measurements = []
 
         for sample in batch_samples:
-            for data in self._read_data(sample, self._column_names):
+            for data in self._read_data(sample):
                 image, steering, throttle, brake, speed = data
                 images.append(image)
                 outputs = [
@@ -69,23 +73,20 @@ class DataGenerator(K.utils.Sequence):
         np.random.shuffle(self._indices)
 
     @staticmethod
-    def _read_data(sample, column_names, steering_correction=0.2):
-        image_center = cv2.imread(os.path.join(DATA_PATH, sample[column_names['center']]))
-        if image_center is not None:
-            image_center = cv2.cvtColor(image_center, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
+    def _read_data(sample, steering_correction=0.2):
+        image_center = cv2.imread(sample[COLUMN_NAMES['center']])
+        image_center = cv2.cvtColor(image_center, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
-        image_left = cv2.imread(os.path.join(DATA_PATH, sample[column_names['left']]))
-        if image_left is not None:
-            image_left = cv2.cvtColor(image_left, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
+        image_left = cv2.imread(sample[COLUMN_NAMES['left']])
+        image_left = cv2.cvtColor(image_left, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
-        image_right = cv2.imread(os.path.join(DATA_PATH, sample[column_names['right']]))
-        if image_right is not None:
-            image_right = cv2.cvtColor(image_right, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
+        image_right = cv2.imread(sample[COLUMN_NAMES['right']])
+        image_right = cv2.cvtColor(image_right, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
-        steering = float(sample[column_names['steering']])
-        throttle = float(sample[column_names['throttle']])
-        brake = float(sample[column_names['brake']])
-        speed = float(sample[column_names['speed']])
+        steering = float(sample[COLUMN_NAMES['steering']])
+        throttle = float(sample[COLUMN_NAMES['throttle']])
+        brake = float(sample[COLUMN_NAMES['brake']])
+        speed = float(sample[COLUMN_NAMES['speed']])
 
         yield image_left              , steering + steering_correction  , throttle, brake, speed  # noqa: E203
         yield image_center            , steering                        , throttle, brake, speed  # noqa: E203
@@ -95,21 +96,16 @@ class DataGenerator(K.utils.Sequence):
         yield np.fliplr(image_right)  , -steering + steering_correction , throttle, brake, speed  # noqa: E203
 
 
-def read_data_file(csvfile):
-    column_names = collections.OrderedDict({
-        'center': 0,
-        'left': 1,
-        'right': 2,
-        'steering': 3,
-        'throttle': 4,
-        'brake': 5,
-        'speed': 6
-    })
-
-    print('Start reading data')
-    samples = pd.read_csv(csvfile, header=0, names=column_names.keys(),
+def _read_data_file(csvfile):
+    print('--- Reading csvfile %s ---' % csvfile)
+    samples = pd.read_csv(csvfile, header=0, names=COLUMN_NAMES.keys(),
                           sep=',', skipinitialspace=True)
-    return samples, column_names
+    imagefiles = samples.to_numpy()
+    dirname = os.path.dirname(csvfile)
+    for index, row in enumerate(imagefiles):
+        for i in range(3):
+            imagefiles[index][i] = os.path.join(dirname, imagefiles[index][i])
+    return imagefiles
 
 
 def _get_LeNet(model):
@@ -143,7 +139,7 @@ def _get_NVidia(model):
     return model
 
 
-def get_model(image_shape, output_shape=1, model_name='LeNet'):
+def get_model(image_shape, output_shape=1, modeltype='LeNet'):
     from keras.models import Sequential
     from keras import layers
 
@@ -155,9 +151,9 @@ def get_model(image_shape, output_shape=1, model_name='LeNet'):
         layers.Lambda(lambda x: x / 255.0 - 0.5),
     ])
 
-    if model_name == 'LeNet':
+    if modeltype == 'LeNet':
         model = _get_LeNet(model)
-    elif model_name == 'NVidia':
+    elif modeltype == 'NVidia':
         model = _get_NVidia(model)
 
     # Output layer
@@ -188,31 +184,52 @@ def show_history(history_object):
     embed()
 
 
-def train_model(train_generator, validation_generator, model):
+def train_model(modelname, train_generator, validation_generator, model):
     print('-' * 80)
     print('Train model')
     print('-' * 80)
+    # FIXME: Use Model.fit, already support generator.
     history_object = model.fit_generator(generator=train_generator,
                                          validation_data=validation_generator,
                                          epochs=3,
                                          verbose=1,
                                          workers=16,
                                          shuffle=True)
-    model.save('model.h5')
+    model.save('%s.h5' % modelname)
     tf.compat.v1.reset_default_graph()
     return history_object
 
 
-def main():
-    samples, column_names = read_data_file(CSV_PATH)
-    train_samples, validation_samples = train_test_split(samples, test_size=0.2)
-    model = get_model(image_shape=(160, 320, 1), output_shape=4, model_name='NVidia')
-    history_object = train_model(DataGenerator(train_samples, column_names),
-                                 DataGenerator(validation_samples, column_names),
+def main(modelname, datafolder):
+    allsamples = None
+    for folder in datafolder:
+        datapath = os.path.join(os.environ['HOME'], 'dev/data/', folder)
+        csvpath = os.path.join(datapath, 'driving_log.csv')
+        samples = _read_data_file(csvpath)
+        if allsamples is None:
+            allsamples = samples
+        else:
+            allsamples = np.vstack([allsamples, samples])
+
+    print('--- Read %d samples ---' % len(allsamples))
+    train_samples, validation_samples = train_test_split(allsamples, test_size=0.2)
+    modeltype = 'NVidia'
+    model = get_model(image_shape=(160, 320, 1), output_shape=4, modeltype=modeltype)
+    print('--- Created %s model ---' % modeltype)
+
+    embed()
+    history_object = train_model(modelname,
+                                 DataGenerator(train_samples),
+                                 DataGenerator(validation_samples),
                                  model)
 
     show_history(history_object)
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Remote Driving')
+    parser.add_argument('--modelname', '-m', type=str, default='model', help='Model name to be saved.')
+    parser.add_argument('--datafolder', '-d', type=str, nargs='+', default=None, help='Path to the data folder.')
+    args = parser.parse_args()
+
+    main(args.modelname, args.datafolder)

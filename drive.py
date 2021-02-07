@@ -21,6 +21,7 @@ from keras import __version__ as keras_version
 
 import tensorflow as tf
 
+from model import TARGET_SPEED
 
 # For issue `failed to create cublas handle: CUBLAS_STATUS_NOT_INITIALIZED`
 # https://github.com/tensorflow/tensorflow/issues/45070
@@ -32,8 +33,6 @@ sio = socketio.Server()
 app = Flask(__name__)
 model = None
 prev_image_array = None
-
-TARGET_SPEED = 32
 
 
 class SimplePIController:
