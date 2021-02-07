@@ -5,6 +5,7 @@ import base64
 from datetime import datetime
 import os
 import shutil
+import cv2
 
 import numpy as np
 import socketio
@@ -55,7 +56,7 @@ class SimplePIController:
 
 
 controller = SimplePIController(0.1, 0.002)
-set_speed = 9
+set_speed = 30  # Target speed
 controller.set_desired(set_speed)
 
 
@@ -63,21 +64,28 @@ controller.set_desired(set_speed)
 def telemetry(sid, data):
     if data:
         # The current steering angle of the car
-        steering_angle = data["steering_angle"]
+        steering_angle = float(data["steering_angle"])
         # The current throttle of the car
         throttle = data["throttle"]
         # The current speed of the car
-        speed = data["speed"]
+        speed = float(data["speed"])
         # The current image from the center camera of the car
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
-        steering_angle = float(model.predict(image_array[None, :, :, :], batch_size=1))
+        image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
+        predictions = model.predict(image_array[None, :, :, :], batch_size=1)[0]
 
-        throttle = controller.update(float(speed))
+        steering_angle = float(predictions[0])
+        # throttle = float(predictions[1])
+        # controller.set_desired(speed)
+        throttle = controller.update(speed)
+        brake = 0.0
+        # brake = float(predictions[2])
+        # speed = float(predictions[3])
 
-        print(steering_angle, throttle)
-        send_control(steering_angle, throttle)
+        print('steering: {:10.8f}, throttle: {:5.3f}, brake: {:5.3f}, speed: {:5.3f}'.format(steering_angle, throttle, brake, speed))
+        send_control(steering_angle, throttle, brake, speed)
 
         # save frame
         if args.image_folder != '':
@@ -92,15 +100,17 @@ def telemetry(sid, data):
 @sio.on('connect')
 def connect(sid, environ):
     print("connect ", sid)
-    send_control(0, 0)
+    send_control(0, 0, 0, 0)
 
 
-def send_control(steering_angle, throttle):
+def send_control(steering_angle, throttle, brake, speed):
     sio.emit(
         "steer",
         data={
-            'steering_angle': steering_angle.__str__(),
-            'throttle': throttle.__str__()
+            'steering_angle': str(steering_angle),
+            'throttle': str(throttle),
+            'brake': str(brake),
+            'speed': str(speed)
         },
         skip_sid=True)
 
