@@ -61,9 +61,9 @@ class DataGenerator(K.utils.Sequence):
                 images.append(image)
                 outputs = [
                     steering,
-                    throttle * 2 - 0.5,
-                    brake * 2 - 0.5,
-                    speed / TARGET_SPEED
+                    throttle,
+                    brake,
+                    speed
                 ]
                 measurements.append(outputs)
 
@@ -74,6 +74,7 @@ class DataGenerator(K.utils.Sequence):
 
     @staticmethod
     def _read_data(sample, steering_correction=0.2):
+        # print('reaing %s' % sample[COLUMN_NAMES['center']])
         image_center = cv2.imread(sample[COLUMN_NAMES['center']])
         image_center = cv2.cvtColor(image_center, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
@@ -100,12 +101,19 @@ def _read_data_file(csvfile):
     print('--- Reading csvfile %s ---' % csvfile)
     samples = pd.read_csv(csvfile, header=0, names=COLUMN_NAMES.keys(),
                           sep=',', skipinitialspace=True)
-    imagefiles = samples.to_numpy()
+    records = samples.to_numpy()
     dirname = os.path.dirname(csvfile)
-    for index, row in enumerate(imagefiles):
+    print('Found %d records' % len(records))
+    for index, row in enumerate(records):
         for i in range(3):
-            imagefiles[index][i] = os.path.join(dirname, imagefiles[index][i])
-    return imagefiles
+            if not os.path.exists(records[index][i]) or not os.path.isfile(records[index][i]):
+                records[index][i] = os.path.join(dirname, records[index][i])
+        # records[COLUMN_NAMES['steering']] = records[COLUMN_NAMES['steering']]
+        records[index][COLUMN_NAMES['throttle']] = float(records[index][COLUMN_NAMES['throttle']]) * 2 - 0.5
+        records[index][COLUMN_NAMES['brake']] = float(records[index][COLUMN_NAMES['brake']]) * 2 - 0.5
+        records[index][COLUMN_NAMES['speed']] = float(records[index][COLUMN_NAMES['speed']]) / TARGET_SPEED * 2 - 0.5
+
+    return records
 
 
 def _get_LeNet(model):
