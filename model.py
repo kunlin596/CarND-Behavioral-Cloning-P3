@@ -32,7 +32,7 @@ np.set_printoptions(precision=3, suppress=True)
 
 class DataGenerator(K.utils.Sequence):
 
-    def __init__(self, samples, column_names=None, batch_size=4, dim=(160, 320, 3)):
+    def __init__(self, samples, column_names=None, batch_size=1, dim=(160, 320, 1)):
         self._batch_size = batch_size
         self._samples = samples.to_numpy()
         self._column_names = column_names
@@ -48,15 +48,21 @@ class DataGenerator(K.utils.Sequence):
         batch_samples = self._samples[indices]
 
         images = []
-        steerings = []
+        measurements = []
 
         for sample in batch_samples:
             for data in self._read_data(sample, self._column_names):
-                image, steering, speed, brake = data
+                image, steering, throttle, brake, speed = data
                 images.append(image)
-                steerings.append(steering)
+                outputs = [
+                    steering,
+                    # throttle,
+                    # brake,
+                    # speed
+                ]
+                measurements.append(outputs)
 
-        return np.asarray(images), np.asarray(steerings)
+        return np.asarray(images), np.asarray(measurements)
 
     def on_epoch_end(self):
         np.random.shuffle(self._indices)
@@ -65,26 +71,27 @@ class DataGenerator(K.utils.Sequence):
     def _read_data(sample, column_names, steering_correction=0.2):
         image_center = cv2.imread(os.path.join(DATA_PATH, sample[column_names['center']]))
         if image_center is not None:
-            image_center = cv2.cvtColor(image_center, cv2.COLOR_BGR2RGB)
+            image_center = cv2.cvtColor(image_center, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
         image_left = cv2.imread(os.path.join(DATA_PATH, sample[column_names['left']]))
         if image_left is not None:
-            image_left = cv2.cvtColor(image_left, cv2.COLOR_BGR2RGB)
+            image_left = cv2.cvtColor(image_left, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
         image_right = cv2.imread(os.path.join(DATA_PATH, sample[column_names['right']]))
         if image_right is not None:
-            image_right = cv2.cvtColor(image_right, cv2.COLOR_BGR2RGB)
+            image_right = cv2.cvtColor(image_right, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
 
+        steering = float(sample[column_names['steering']])
+        throttle = float(sample[column_names['throttle']])
         brake = float(sample[column_names['brake']])
         speed = float(sample[column_names['speed']])
-        steering = float(sample[column_names['steering']])
 
-        yield image_left              , steering + steering_correction  , speed , brake  # noqa: E203
-        yield image_center            , steering                        , speed , brake  # noqa: E203
-        yield image_right             , steering - steering_correction  , speed , brake  # noqa: E203
-        yield np.fliplr(image_left)   , -steering - steering_correction , speed , brake  # noqa: E203
-        yield np.fliplr(image_center) , -steering                       , speed , brake  # noqa: E203
-        yield np.fliplr(image_right)  , -steering + steering_correction , speed , brake  # noqa: E203
+        yield image_left              , steering + steering_correction  , throttle, brake, speed  # noqa: E203
+        yield image_center            , steering                        , throttle, brake, speed  # noqa: E203
+        yield image_right             , steering - steering_correction  , throttle, brake, speed  # noqa: E203
+        yield np.fliplr(image_left)   , -steering - steering_correction , throttle, brake, speed  # noqa: E203
+        yield np.fliplr(image_center) , -steering                       , throttle, brake, speed  # noqa: E203
+        yield np.fliplr(image_right)  , -steering + steering_correction , throttle, brake, speed  # noqa: E203
 
 
 def read_data_file(csvfile):
@@ -135,15 +142,14 @@ def _get_NVidia(model):
     return model
 
 
-def get_model(image_shape, model_name='LeNet'):
+def get_model(image_shape, output_shape=1, model_name='LeNet'):
     from keras.models import Sequential
     from keras import layers
 
     model = Sequential([
         # Preprocessing, RGB to gray scale
-        layers.Convolution2D(1, (1, 1), activation='relu', data_format="channels_last", input_shape=image_shape),
         # Crop top region of the image, top, bottom, left, right
-        layers.Cropping2D(cropping=((50, 20), (0, 0))),
+        layers.Cropping2D(cropping=((50, 20), (0, 0)), data_format="channels_last", input_shape=image_shape),
         # Normalize image to be 0-meaned and range from 0 to 1
         layers.Lambda(lambda x: x / 255.0 - 0.5),
     ])
@@ -154,7 +160,7 @@ def get_model(image_shape, model_name='LeNet'):
         model = _get_NVidia(model)
 
     # Output layer
-    model.add(layers.Dense(1))
+    model.add(layers.Dense(output_shape))
 
     model.compile(
         loss='mse',
@@ -174,18 +180,22 @@ def show_history(history_object):
     plt.xlabel('epoch')
     plt.legend(['training set', 'validation set'], loc='upper right')
     plt.show(block=False)
+    plt.ion()
+    print('-' * 80)
+    print('Traning history')
+    print('-' * 80)
+    embed()
 
 
 def train_model(train_generator, validation_generator, model):
     print('-' * 80)
     print('Train model')
     print('-' * 80)
-    embed()
     history_object = model.fit_generator(generator=train_generator,
                                          validation_data=validation_generator,
-                                         epochs=5,
+                                         epochs=3,
                                          verbose=1,
-                                         workers=8,
+                                         workers=16,
                                          shuffle=True)
     model.save('model.h5')
     tf.compat.v1.reset_default_graph()
@@ -195,7 +205,7 @@ def train_model(train_generator, validation_generator, model):
 def main():
     samples, column_names = read_data_file(CSV_PATH)
     train_samples, validation_samples = train_test_split(samples, test_size=0.2)
-    model = get_model(image_shape=(160, 320, 3), model_name='NVidia')
+    model = get_model(image_shape=(160, 320, 1), output_shape=1, model_name='NVidia')
     history_object = train_model(DataGenerator(train_samples, column_names),
                                  DataGenerator(validation_samples, column_names),
                                  model)
