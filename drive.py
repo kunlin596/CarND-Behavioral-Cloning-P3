@@ -77,9 +77,9 @@ def telemetry(sid, data):
         predictions = model.predict(image_array[None, :, :, :], batch_size=1)[0]
 
         steering_angle = float(predictions[0])
-        throttle = (float(predictions[1]) + 0.5) / 2
-        brake = (float(predictions[2]) + 0.5) / 2
-        speed = (float(predictions[3]) + 0.5) / 2 * TARGET_SPEED
+        throttle = (float(predictions[1]) + 1.0) / 2
+        brake = (float(predictions[2]) + 1.0) / 2
+        speed = (float(predictions[3]) + 1.0) / 2 * TARGET_SPEED
 
         # FIXME: Is this formula correct?
         # throttle = controller.update(speed) * throttle * brake

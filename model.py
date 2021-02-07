@@ -101,17 +101,18 @@ def _read_data_file(csvfile):
     print('--- Reading csvfile %s ---' % csvfile)
     samples = pd.read_csv(csvfile, header=0, names=COLUMN_NAMES.keys(),
                           sep=',', skipinitialspace=True)
+
     records = samples.to_numpy()
     dirname = os.path.dirname(csvfile)
     print('Found %d records' % len(records))
     for index, row in enumerate(records):
-        for i in range(3):
+        for i in [COLUMN_NAMES['left'], COLUMN_NAMES['center'], COLUMN_NAMES['right']]:
             if not os.path.exists(records[index][i]) or not os.path.isfile(records[index][i]):
                 records[index][i] = os.path.join(dirname, records[index][i])
-        # records[COLUMN_NAMES['steering']] = records[COLUMN_NAMES['steering']]
-        records[index][COLUMN_NAMES['throttle']] = float(records[index][COLUMN_NAMES['throttle']]) * 2 - 0.5
-        records[index][COLUMN_NAMES['brake']] = float(records[index][COLUMN_NAMES['brake']]) * 2 - 0.5
-        records[index][COLUMN_NAMES['speed']] = float(records[index][COLUMN_NAMES['speed']]) / TARGET_SPEED * 2 - 0.5
+        # records[index][COLUMN_NAMES['steering']] = records[index][COLUMN_NAMES['steering']]
+        records[index][COLUMN_NAMES['throttle']] = float(records[index][COLUMN_NAMES['throttle']]) * 2 - 1.0
+        records[index][COLUMN_NAMES['brake']] = float(records[index][COLUMN_NAMES['brake']]) * 2 - 1.0
+        records[index][COLUMN_NAMES['speed']] = float(records[index][COLUMN_NAMES['speed']]) / TARGET_SPEED * 2 - 1.0
 
     return records
 
@@ -133,10 +134,13 @@ def _get_NVidia(model):
     from keras import layers
     model.add(layers.Convolution2D(24, (5, 5), activation='relu'))
     model.add(layers.MaxPool2D((2, 2)))
+    model.add(layers.Dropout(0.2))
     model.add(layers.Convolution2D(36, (5, 5), activation='relu'))
     model.add(layers.MaxPool2D((2, 2)))
+    model.add(layers.Dropout(0.2))
     model.add(layers.Convolution2D(48, (3, 3), activation='relu'))
     model.add(layers.MaxPool2D((2, 2)))
+    model.add(layers.Dropout(0.2))
     model.add(layers.Convolution2D(64, (3, 3), activation='relu'))
     model.add(layers.Convolution2D(64, (3, 3), activation='relu'))
     model.add(layers.Flatten())
