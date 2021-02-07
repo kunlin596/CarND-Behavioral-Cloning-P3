@@ -61,9 +61,9 @@ class DataGenerator(K.utils.Sequence):
                 images.append(image)
                 outputs = [
                     steering,
-                    throttle,
-                    brake,
-                    speed
+                    # throttle,
+                    # brake,
+                    # speed
                 ]
                 measurements.append(outputs)
 
@@ -73,7 +73,7 @@ class DataGenerator(K.utils.Sequence):
         np.random.shuffle(self._indices)
 
     @staticmethod
-    def _read_data(sample, steering_correction=0.2):
+    def _read_data(sample, steering_correction=0.15):
         # print('reaing %s' % sample[COLUMN_NAMES['center']])
         image_center = cv2.imread(sample[COLUMN_NAMES['center']])
         image_center = cv2.cvtColor(image_center, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
@@ -226,10 +226,9 @@ def main(modelname, datafolder):
     print('--- Read %d samples ---' % len(allsamples))
     train_samples, validation_samples = train_test_split(allsamples, test_size=0.2)
     modeltype = 'NVidia'
-    model = get_model(image_shape=(160, 320, 1), output_shape=4, modeltype=modeltype)
+    model = get_model(image_shape=(160, 320, 1), output_shape=1, modeltype=modeltype)
     print('--- Created %s model ---' % modeltype)
 
-    embed()
     history_object = train_model(modelname,
                                  DataGenerator(train_samples),
                                  DataGenerator(validation_samples),

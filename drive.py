@@ -77,14 +77,18 @@ def telemetry(sid, data):
         predictions = model.predict(image_array[None, :, :, :], batch_size=1)[0]
 
         steering_angle = float(predictions[0])
-        throttle = (float(predictions[1]) + 1.0) / 2
-        brake = (float(predictions[2]) + 1.0) / 2
-        speed = (float(predictions[3]) + 1.0) / 2 * TARGET_SPEED
+        speed = (float(predictions[1]) + 1.0) / 2 * TARGET_SPEED
+        brake = 0
+        # FIXME: Don't predict other attributes for now
+        # brake = (float(predictions[2]) + 1.0) / 2
+        # speed = (float(predictions[3]) + 1.0) / 2 * TARGET_SPEED
+        # throttle = (float(predictions[1]) + 1.0) / 2
 
         # FIXME: Is this formula correct?
-        # throttle = controller.update(speed) * throttle * brake
+        throttle = controller.update(speed)
 
-        print('steering: {:10.8f}, throttle: {:5.3f}, brake: {:5.3f}, speed: {:5.3f}'.format(steering_angle, throttle, brake, speed))
+        # print('steering: {:10.8f}, throttle: {:5.3f}, brake: {:5.3f}, speed: {:5.3f}'.format(steering_angle, throttle, brake, speed))
+        print('steering: {:10.8f}, speed: {:5.3f}'.format(steering_angle, speed))
         send_control(steering_angle, throttle, brake, speed)
 
         # save frame
@@ -109,8 +113,8 @@ def send_control(steering_angle, throttle, brake, speed):
         data={
             'steering_angle': str(steering_angle),
             'throttle': str(throttle),
-            'brake': str(brake),
-            'speed': str(speed)
+            # 'brake': str(brake),
+            # 'speed': str(speed)
         },
         skip_sid=True)
 
