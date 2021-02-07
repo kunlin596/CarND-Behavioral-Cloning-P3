@@ -24,7 +24,7 @@ tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 np.set_printoptions(precision=3, suppress=True)
 
-TARGET_SPEED = 32
+TARGET_SPEED = 31.0
 COLUMN_NAMES = collections.OrderedDict({
     'center': 0,
     'left': 1,
@@ -38,7 +38,7 @@ COLUMN_NAMES = collections.OrderedDict({
 
 class DataGenerator(K.utils.Sequence):
 
-    def __init__(self, samples, batch_size=1, dim=(160, 320, 1)):
+    def __init__(self, samples, batch_size=4, dim=(160, 320, 1)):
         self._batch_size = batch_size
         self._samples = samples
         self._indices = np.arange(samples.shape[0])
@@ -61,9 +61,9 @@ class DataGenerator(K.utils.Sequence):
                 images.append(image)
                 outputs = [
                     steering,
-                    # throttle,
-                    # brake,
-                    # speed
+                    throttle,
+                    brake,
+                    speed
                 ]
                 measurements.append(outputs)
 
@@ -109,10 +109,10 @@ def _read_data_file(csvfile):
         for i in [COLUMN_NAMES['left'], COLUMN_NAMES['center'], COLUMN_NAMES['right']]:
             if not os.path.exists(records[index][i]) or not os.path.isfile(records[index][i]):
                 records[index][i] = os.path.join(dirname, records[index][i])
-        # records[index][COLUMN_NAMES['steering']] = records[index][COLUMN_NAMES['steering']]
-        records[index][COLUMN_NAMES['throttle']] = float(records[index][COLUMN_NAMES['throttle']]) * 2 - 1.0
-        records[index][COLUMN_NAMES['brake']] = float(records[index][COLUMN_NAMES['brake']]) * 2 - 1.0
-        records[index][COLUMN_NAMES['speed']] = float(records[index][COLUMN_NAMES['speed']]) / TARGET_SPEED * 2 - 1.0
+        records[index][COLUMN_NAMES['steering']] = float(records[index][COLUMN_NAMES['steering']])
+        records[index][COLUMN_NAMES['throttle']] = float(records[index][COLUMN_NAMES['throttle']]) - 0.5
+        records[index][COLUMN_NAMES['brake']] = float(records[index][COLUMN_NAMES['brake']]) - 0.5
+        records[index][COLUMN_NAMES['speed']] = float(records[index][COLUMN_NAMES['speed']]) / TARGET_SPEED - 0.5
 
     return records
 
@@ -142,6 +142,8 @@ def _get_NVidia(model):
     model.add(layers.MaxPool2D((2, 2)))
     model.add(layers.Dropout(0.2))
     model.add(layers.Convolution2D(64, (3, 3), activation='relu'))
+    model.add(layers.MaxPool2D((2, 2)))
+    model.add(layers.Dropout(0.2))
     model.add(layers.Convolution2D(64, (3, 3), activation='relu'))
     model.add(layers.Flatten())
     model.add(layers.Dense(1164, activation='relu'))
@@ -156,7 +158,6 @@ def get_model(image_shape, output_shape=1, modeltype='LeNet'):
     from keras import layers
 
     model = Sequential([
-        # Preprocessing, RGB to gray scale
         # Crop top region of the image, top, bottom, left, right
         layers.Cropping2D(cropping=((50, 20), (0, 0)), data_format="channels_last", input_shape=image_shape),
         # Normalize image to be 0-meaned and range from 0 to 1
@@ -226,7 +227,7 @@ def main(modelname, datafolder):
     print('--- Read %d samples ---' % len(allsamples))
     train_samples, validation_samples = train_test_split(allsamples, test_size=0.2)
     modeltype = 'NVidia'
-    model = get_model(image_shape=(160, 320, 1), output_shape=1, modeltype=modeltype)
+    model = get_model(image_shape=(160, 320, 1), output_shape=4, modeltype=modeltype)
     print('--- Created %s model ---' % modeltype)
 
     history_object = train_model(modelname,
