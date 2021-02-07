@@ -11,7 +11,6 @@ import seaborn as sns  # noqa
 from IPython import embed
 import tensorflow as tf
 
-
 # For issue `failed to create cublas handle: CUBLAS_STATUS_NOT_INITIALIZED`
 # https://github.com/tensorflow/tensorflow/issues/45070
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -60,6 +59,7 @@ def read_data(csvfile):
 
         measurement = float(row[column_names['steering']])
         yield image_left, image_center, image_right, measurement
+        yield image_left, np.fliplr(image_center), image_right, -measurement  # data augmentation
 
 
 def get_model(X_train, y_train):
@@ -67,13 +67,21 @@ def get_model(X_train, y_train):
     from keras import layers
 
     model = Sequential([
+        # Preprocessing, RGB to gray scale
         layers.Conv2D(1, (1, 1), activation='relu', data_format="channels_last", input_shape=(160, 320, 3)),
-        layers.experimental.preprocessing.Rescaling(1. / 255),
-        layers.Conv2D(32, (3, 3), activation='relu', data_format="channels_last"),
+        # Normalize image to be 0-means and range from 0 to 1
+        layers.Lambda(lambda x: x / 255.0 - 0.5),
+        # LeNet
+        # Convolutional layers
+        layers.Conv2D(6, (5, 5), activation='relu'),
+        layers.Dropout(0.2),
         layers.MaxPool2D((2, 2)),
-        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.Conv2D(16, (5, 5), activation='relu'),
+        layers.MaxPool2D((2, 2)),
+        # Fully connected layers
         layers.Flatten(),
-        layers.Dense(64, activation='relu'),
+        layers.Dense(120, activation='relu'),
+        layers.Dense(84, activation='relu'),
         layers.Dense(1)
     ])
 
@@ -86,6 +94,7 @@ def get_model(X_train, y_train):
 
     model.fit(X_train, y_train, validation_split=0.2, shuffle=True, epochs=5)
     model.save('model.h5')
+    tf.compat.v1.reset_default_graph()
 
 
 def main():
