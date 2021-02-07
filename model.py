@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import keras as K
+from drive import TARGET_SPEED
 
 import seaborn as sns  # noqa: F401
 import sklearn  # noqa: F401
@@ -56,9 +57,9 @@ class DataGenerator(K.utils.Sequence):
                 images.append(image)
                 outputs = [
                     steering,
-                    # throttle,
-                    # brake,
-                    # speed
+                    throttle * 2 - 0.5,
+                    brake * 2 - 0.5,
+                    speed / TARGET_SPEED
                 ]
                 measurements.append(outputs)
 
@@ -205,7 +206,7 @@ def train_model(train_generator, validation_generator, model):
 def main():
     samples, column_names = read_data_file(CSV_PATH)
     train_samples, validation_samples = train_test_split(samples, test_size=0.2)
-    model = get_model(image_shape=(160, 320, 1), output_shape=1, model_name='NVidia')
+    model = get_model(image_shape=(160, 320, 1), output_shape=4, model_name='NVidia')
     history_object = train_model(DataGenerator(train_samples, column_names),
                                  DataGenerator(validation_samples, column_names),
                                  model)

@@ -33,6 +33,8 @@ app = Flask(__name__)
 model = None
 prev_image_array = None
 
+TARGET_SPEED = 32
+
 
 class SimplePIController:
     def __init__(self, Kp, Ki):
@@ -56,8 +58,7 @@ class SimplePIController:
 
 
 controller = SimplePIController(0.1, 0.002)
-set_speed = 30  # Target speed
-controller.set_desired(set_speed)
+controller.set_desired(TARGET_SPEED)
 
 
 @sio.on('telemetry')
@@ -72,17 +73,17 @@ def telemetry(sid, data):
         # The current image from the center camera of the car
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
-        image_array = np.asarray(image)
-        image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)[..., np.newaxis]
+
+        image_array = cv2.cvtColor(np.asarray(image), cv2.COLOR_BGR2GRAY)[..., np.newaxis]
         predictions = model.predict(image_array[None, :, :, :], batch_size=1)[0]
 
         steering_angle = float(predictions[0])
-        # throttle = float(predictions[1])
-        # controller.set_desired(speed)
-        throttle = controller.update(speed)
-        brake = 0.0
-        # brake = float(predictions[2])
-        # speed = float(predictions[3])
+        throttle = (float(predictions[1]) + 0.5) / 2
+        brake = (float(predictions[2]) + 0.5) / 2
+        speed = float(predictions[3]) * TARGET_SPEED
+
+        # FIXME: Is this formula correct?
+        # throttle = controller.update(speed) * throttle * brake
 
         print('steering: {:10.8f}, throttle: {:5.3f}, brake: {:5.3f}, speed: {:5.3f}'.format(steering_angle, throttle, brake, speed))
         send_control(steering_angle, throttle, brake, speed)
