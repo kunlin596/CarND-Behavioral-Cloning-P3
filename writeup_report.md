@@ -176,3 +176,6 @@ Some key points about the training process:
 
 #### 5. Result
 As a final result, the car can drive at full speed in the simulator for consecutive multiple loops w/o any issues.
+
+- Model: [track1.h5](https://github.com/kunlin596/CarND-Behavioral-Cloning-P3/blob/master/track1.h5)
+- Video: [run1.mp4](https://github.com/kunlin596/CarND-Behavioral-Cloning-P3/blob/master/run1.mp4)
